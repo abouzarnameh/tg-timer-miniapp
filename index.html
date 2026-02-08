@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>تایمرهای گروه</title>
+  <title>Timers</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -14,7 +14,6 @@
     .muted { color: var(--muted); font-size: 13px; margin-bottom: 10px; line-height: 1.6; }
     .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 14px; }
     .pill { border:1px solid var(--bd); border-radius:999px; padding:6px 10px; font-size:13px; }
-    .list { margin-top: 10px; }
     .card {
       border: 1px solid var(--bd);
       border-radius: 14px;
@@ -42,42 +41,38 @@
       border: 1px solid var(--bd);
       background: white;
       cursor: pointer;
-      font-weight: 700;
+      font-weight: 800;
+      text-decoration: none;
+      color: #111;
     }
     .btn:active { transform: scale(0.99); }
+    .link { text-decoration: none; color: inherit; }
   </style>
 </head>
 
 <body>
-  <h3>تایمرهای گروه</h3>
+  <h3 id="pageTitle">تایمرها</h3>
   <div class="muted" id="meta">در حال بارگذاری…</div>
 
   <div class="row" id="chips" style="display:none;">
-    <span class="pill" id="chipSid"></span>
-    <span class="pill" id="chipStatus"></span>
-    <span class="pill" id="chipCount"></span>
+    <span class="pill" id="chipInfo"></span>
   </div>
 
-  <div class="row">
+  <div class="row" id="controls" style="display:none;">
     <button class="btn" id="btnStart" style="display:none;">▶️ شروع همه</button>
     <button class="btn" id="btnRefresh">🔄 بروزرسانی</button>
+    <a class="btn" id="btnBack" href="./" style="display:none;">⬅️ همه سشن‌ها</a>
   </div>
 
-  <div class="list" id="list"></div>
+  <div id="content"></div>
   <div id="error" class="err" style="display:none;"></div>
 
   <script>
-    // ========= تنظیمات =========
     const API_BASE = "https://tg-timer-api.onrender.com";
 
-    // ========= تلگرام =========
     const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand?.();
-    }
+    if (tg) { tg.ready(); tg.expand?.(); }
 
-    // ========= Helpers =========
     function qs(name) {
       const url = new URL(window.location.href);
       return url.searchParams.get(name);
@@ -125,15 +120,21 @@
         .replaceAll("'","&#039;");
     }
 
-    // ========= State =========
-    const sid = qs("sid");
-    let session = null;
-    let items = [];
-
+    const sid = qs("sid"); // اگر نبود => لیست سشن‌ها
+    const content = document.getElementById("content");
+    const controls = document.getElementById("controls");
     const btnStart = document.getElementById("btnStart");
     const btnRefresh = document.getElementById("btnRefresh");
+    const btnBack = document.getElementById("btnBack");
+    const chips = document.getElementById("chips");
+    const chipInfo = document.getElementById("chipInfo");
+    const pageTitle = document.getElementById("pageTitle");
 
-    btnRefresh.onclick = async () => { await load(); render(); };
+    let session = null;
+    let items = [];
+    let sessionsList = [];
+
+    btnRefresh.onclick = async () => { await boot(); };
 
     btnStart.onclick = async () => {
       if (!sid) return;
@@ -141,102 +142,108 @@
         clearError();
         const r = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/start`, { method: "POST" });
         const data = await r.json();
-        if (data.error) {
-          showError("خطا در شروع: " + data.error);
-          return;
-        }
-        await load();
-        render();
+        if (data.error) { showError("خطا در شروع: " + data.error); return; }
+        await loadSession();
+        renderSession();
       } catch (e) {
         showError("خطا در شروع: " + String(e));
       }
     };
 
-    async function load() {
-      if (!sid) {
-        setMeta("❌ sid پیدا نشد. باید از لینک بات وارد شوی (مثلاً .../?sid=12).");
-        document.getElementById("chips").style.display = "none";
-        document.getElementById("list").innerHTML = "";
-        btnStart.style.display = "none";
-        return;
-      }
-
-      try {
-        clearError();
-
-        const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
-          method: "GET",
-          headers: { "Accept": "application/json" },
-        });
-
-        if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-        const data = await res.json();
-
-        if (data.error) {
-          // مثلا not_found
-          session = null;
-          items = [];
-          setMeta(`sid=#${sid} | خطا: ${data.error}`);
-          document.getElementById("chips").style.display = "flex";
-          document.getElementById("chipSid").textContent = `SID: ${sid}`;
-          document.getElementById("chipStatus").textContent = `Status: -`;
-          document.getElementById("chipCount").textContent = `Count: 0`;
-          btnStart.style.display = "none";
-          showError("این sid پیدا نشد. احتمالاً هنوز توسط بات ساخته نشده.");
-          return;
-        }
-
-        session = data.session;
-        items = Array.isArray(data.items) ? data.items : [];
-
-        const chatId = tg?.initDataUnsafe?.chat?.id;
-        const chatType = tg?.initDataUnsafe?.chat_type;
-
-        setMeta(
-          `sid=#${sid} | وضعیت: ${statusLabel(session?.status)}`
-          + (chatId ? ` | chat_id: ${chatId}` : "")
-          + (chatType ? ` | chat_type: ${chatType}` : "")
-        );
-
-        document.getElementById("chips").style.display = "flex";
-        document.getElementById("chipSid").textContent = `SID: ${sid}`;
-        document.getElementById("chipStatus").textContent = `Status: ${statusLabel(session?.status)}`;
-        document.getElementById("chipCount").textContent = `Count: ${items.length}`;
-
-        // اگر pending بود، دکمه شروع رو نشون بده
-        btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
-
-      } catch (e) {
-        showError(
-          `خطا در دریافت داده از سرور.\n\n` +
-          `جزئیات خطا:\n${String(e)}`
-        );
-      }
+    async function loadSession() {
+      const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
+        method: "GET", headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      if (data.error) return { error: data.error };
+      session = data.session;
+      items = Array.isArray(data.items) ? data.items : [];
+      return { ok: true };
     }
 
-    function render() {
-      const list = document.getElementById("list");
+    async function loadSessionsList() {
+      // از تلگرام user_id می‌گیریم
+      const creatorId = tg?.initDataUnsafe?.user?.id;
+      if (!creatorId) {
+        return { error: "user_id از تلگرام نیومد. این صفحه را از داخل تلگرام باز کن." };
+      }
 
-      if (!sid) {
-        list.innerHTML = "";
+      const res = await fetch(`${API_BASE}/sessions_by_creator?creator_id=${encodeURIComponent(creatorId)}`, {
+        method: "GET", headers: { "Accept": "application/json" },
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      sessionsList = Array.isArray(data) ? data : [];
+      return { ok: true, creatorId };
+    }
+
+    function renderSessionsList(creatorId) {
+      pageTitle.textContent = "سشن‌های من";
+      controls.style.display = "flex";
+      btnStart.style.display = "none";
+      btnBack.style.display = "none";
+
+      chips.style.display = "flex";
+      chipInfo.textContent = `user_id: ${creatorId} | sessions: ${sessionsList.length}`;
+
+      setMeta("یک سشن را انتخاب کن تا واردش شوی و Start بزنی.");
+
+      if (sessionsList.length === 0) {
+        content.innerHTML = `<div class="muted">هنوز هیچ سشنی نداری. از داخل گروه با /add و /run بساز.</div>`;
         return;
       }
 
-      if (!session) {
-        list.innerHTML = `<div class="muted">در حال بارگذاری…</div>`;
-        return;
-      }
+      content.innerHTML = sessionsList.map(s => {
+        const link = `./?sid=${s.id}`;
+        return `
+          <a class="link" href="${link}">
+            <div class="card">
+              <div class="title">
+                <span>#${s.id}</span>
+                <span class="badge">${statusLabel(s.status)}</span>
+              </div>
+              <div class="sub">
+                <span>items: ${s.item_count}</span>
+                <span>chat_id: ${s.chat_id}</span>
+              </div>
+            </div>
+          </a>
+        `;
+      }).join("");
+    }
+
+    function renderSession() {
+      pageTitle.textContent = `سشن #${sid}`;
+      controls.style.display = "flex";
+      btnBack.style.display = "inline-block";
+      btnBack.href = "./";
+
+      chips.style.display = "flex";
+      chipInfo.textContent = `sid: ${sid} | status: ${statusLabel(session?.status)} | items: ${items.length}`;
+
+      const chatId = tg?.initDataUnsafe?.chat?.id;
+      const chatType = tg?.initDataUnsafe?.chat_type;
+      setMeta(
+        `وضعیت: ${statusLabel(session?.status)}`
+        + (chatId ? ` | chat_id: ${chatId}` : "")
+        + (chatType ? ` | chat_type: ${chatType}` : "")
+      );
+
+      // Start فقط وقتی pending باشد
+      btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
 
       if (!items.length) {
-        list.innerHTML = `<div class="muted">هیچ تایمری برای این سشن ثبت نشده.</div>`;
+        content.innerHTML = `<div class="muted">هیچ تایمری برای این سشن ثبت نشده.</div>`;
         return;
       }
 
       const now = Date.now();
 
-      // اگر هنوز شروع نشده: فقط مدت‌ها رو نشون بده
+      // pending: فقط مدت‌ها
       if (session.status === "pending" || !session.started_at_ms) {
-        list.innerHTML = items
+        content.innerHTML = items
           .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
           .map((t, idx) => `
             <div class="card">
@@ -245,50 +252,82 @@
                 <span class="badge">ثبت شده</span>
               </div>
               <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
-              <div class="sub">
-                <span>مدت: ${fmt(Number(t.duration_ms || 0))}</span>
-              </div>
             </div>
           `).join("");
         return;
       }
 
-      // ===== حالت running: همه همزمان شروع می‌شوند =====
+      // running: همه همزمان
       const startedAt = Number(session.started_at_ms);
-
-      list.innerHTML = items
+      content.innerHTML = items
         .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
         .map((t, idx) => {
           const endAt = startedAt + Number(t.duration_ms || 0);
           const left = endAt - now;
           const isDone = left <= 0;
-
-          const badge = isDone ? "تمام شد" : "در حال اجرا";
-
           return `
             <div class="card">
               <div class="title">
                 <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                <span class="badge">${badge}</span>
+                <span class="badge">${isDone ? "تمام شد" : "در حال اجرا"}</span>
               </div>
               <div class="time">${fmt(left)}</div>
-              <div class="sub">
-                <span>مدت: ${fmt(Number(t.duration_ms || 0))}</span>
-              </div>
+              <div class="sub"><span>مدت: ${fmt(Number(t.duration_ms||0))}</span></div>
             </div>
           `;
         }).join("");
     }
 
-    (async () => {
-      await load();
-      render();
+    async function boot() {
+      clearError();
 
-      // لایو
-      setInterval(render, 200);
+      try {
+        if (!sid) {
+          const r = await loadSessionsList();
+          if (r.error) { showError(r.error); return; }
+          renderSessionsList(r.creatorId);
+          return;
+        }
+
+        const r = await loadSession();
+        if (r.error) {
+          pageTitle.textContent = `سشن #${sid}`;
+          controls.style.display = "flex";
+          btnBack.style.display = "inline-block";
+          btnBack.href = "./";
+          btnStart.style.display = "none";
+          chips.style.display = "flex";
+          chipInfo.textContent = `sid: ${sid}`;
+          setMeta("این sid پیدا نشد.");
+          showError("این sid پیدا نشد (not_found). احتمالاً هنوز ساخته نشده.");
+          content.innerHTML = "";
+          return;
+        }
+
+        renderSession();
+
+      } catch (e) {
+        showError("خطا: " + String(e));
+      }
+    }
+
+    // Boot + live
+    (async () => {
+      await boot();
+
+      // لایو فقط وقتی داخل یک سشن هستیم
+      setInterval(() => {
+        if (sid && session && session.status === "running") {
+          renderSession();
+        }
+      }, 200);
 
       // سینک سبک
-      setInterval(load, 5000);
+      setInterval(async () => {
+        if (sid) {
+          try { await loadSession(); } catch {}
+        }
+      }, 5000);
     })();
   </script>
 </body>
