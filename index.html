@@ -3,36 +3,99 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>تایمرهای گروه</title>
+  <title>تایمرها</title>
 
-  <!-- کتابخانه رسمی تلگرام برای Mini App -->
+  <!-- Telegram Mini App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
-    body { font-family: sans-serif; padding: 14px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin: 10px 0; }
-    .title { font-weight: 700; margin-bottom: 6px; }
-    .time { font-size: 22px; }
-    .muted { color: #666; font-size: 13px; }
+    :root { --bd:#e6e6e6; --muted:#6b7280; }
+    body { font-family: sans-serif; padding: 14px; margin: 0; }
+    h3 { margin: 0 0 8px 0; }
+    .muted { color: var(--muted); font-size: 13px; margin-bottom: 10px; line-height: 1.6; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 14px; }
+    .pill { border:1px solid var(--bd); border-radius:999px; padding:6px 10px; font-size:13px; }
+    .list { margin-top: 10px; }
+    .card {
+      border: 1px solid var(--bd);
+      border-radius: 14px;
+      padding: 12px;
+      margin: 10px 0;
+    }
+    .title { font-weight: 800; margin-bottom: 8px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+    .badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--bd); color: #111; }
+    .time { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .sub { margin-top: 8px; color: var(--muted); font-size: 13px; display:flex; gap:12px; flex-wrap:wrap; }
+    .err {
+      border: 1px solid #fca5a5;
+      background: #fff1f2;
+      color: #9f1239;
+      padding: 10px;
+      border-radius: 12px;
+      line-height: 1.6;
+      margin-top: 12px;
+      white-space: pre-wrap;
+    }
+    .btn {
+      display:inline-block;
+      padding:10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--bd);
+      background: white;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn:active { transform: scale(0.99); }
   </style>
 </head>
+
 <body>
-  <h3>تایمرهای فعال</h3>
-  <div class="muted" id="meta"></div>
-  <div id="list"></div>
+  <h3>تایمرهای گروه</h3>
+  <div class="muted" id="meta">در حال بارگذاری…</div>
+
+  <div class="row" id="chips" style="display:none;">
+    <span class="pill" id="chipSid"></span>
+    <span class="pill" id="chipStatus"></span>
+    <span class="pill" id="chipCount"></span>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div id="error" class="err" style="display:none;"></div>
 
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
+    // ----------------------------
+    // Settings
+    // ----------------------------
+    // IMPORTANT: اگر مینی اپ روی GitHub Pages است، API_BASE باید آنلاین و HTTPS باشد
+    // مثال: https://your-domain.com
+    const API_BASE = "http://127.0.0.1:8000"; // بعداً آنلاینش کن
 
-    // فعلاً تایمرها را “فیک” می‌گذاریم تا لایو بودن را ببینی
-    // در مراحل بعد، همین را از سرور می‌گیریم
-    const demoTimers = [
-      { title: "تایمر ۱", start_at_ms: Date.now() - 10_000, duration_ms: 5 * 60_000 },
-      { title: "تایمر ۲", start_at_ms: Date.now() - 2_000,  duration_ms: 30_000 },
-    ];
+    // ----------------------------
+    // Telegram WebApp
+    // ----------------------------
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand?.();
+    }
 
-    let timers = demoTimers;
+    // ----------------------------
+    // Helpers
+    // ----------------------------
+    function qs(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
+
+    function showError(text) {
+      const el = document.getElementById("error");
+      el.style.display = "block";
+      el.textContent = text;
+    }
+
+    function setMeta(text) {
+      document.getElementById("meta").textContent = text;
+    }
 
     function fmt(ms) {
       ms = Math.max(0, ms);
@@ -40,35 +103,223 @@
       const hh = Math.floor(s / 3600);
       const mm = Math.floor((s % 3600) / 60);
       const ss = s % 60;
-      return (hh > 0 ? String(hh).padStart(2,'0') + ":" : "") +
-             String(mm).padStart(2,'0') + ":" +
-             String(ss).padStart(2,'0');
+      return `${String(hh).padStart(2,'0')}.${String(mm).padStart(2,'0')}.${String(ss).padStart(2,'0')}`;
+    }
+
+    function statusLabel(status) {
+      if (status === "pending") return "در انتظار شروع";
+      if (status === "running") return "در حال اجرا";
+      if (status === "stopped") return "متوقف شده";
+      if (status === "deleted") return "حذف شده";
+      return status || "-";
+    }
+
+    // ----------------------------
+    // State
+    // ----------------------------
+    const sid = qs("sid"); // مثال: ?sid=42
+    let session = null;
+    let items = [];
+
+    // هر آیتم می‌تونه این فیلدها رو داشته باشه:
+    // - duration_ms (اجباری)
+    // - title (اختیاری)
+    // - order_index (اجباری)
+    // - gap_ms (اختیاری): فاصله قبل از شروع همین آیتم نسبت به قبلی (به میلی‌ثانیه)
+    //
+    // اگر gap_ms نداری، پیش‌فرض 0 حساب می‌کنیم.
+
+    async function load() {
+      if (!sid) {
+        setMeta("❌ sid پیدا نشد. باید از داخل لینک/دکمه‌ی بات وارد این صفحه شوید.");
+        document.getElementById("chips").style.display = "none";
+        document.getElementById("list").innerHTML = "";
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+        });
+
+        if (!res.ok) {
+          throw new Error(`API error: ${res.status} ${res.statusText}`);
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+          throw new Error(`API says: ${data.error}`);
+        }
+
+        session = data.session;
+        items = Array.isArray(data.items) ? data.items : [];
+
+        // UI meta
+        const chatId = tg?.initDataUnsafe?.chat?.id;
+        const chatType = tg?.initDataUnsafe?.chat_type;
+
+        setMeta(
+          `sid=#${sid} | وضعیت: ${statusLabel(session?.status)}`
+          + (chatId ? ` | chat_id: ${chatId}` : "")
+          + (chatType ? ` | chat_type: ${chatType}` : "")
+        );
+
+        document.getElementById("chips").style.display = "flex";
+        document.getElementById("chipSid").textContent = `SID: ${sid}`;
+        document.getElementById("chipStatus").textContent = `Status: ${statusLabel(session?.status)}`;
+        document.getElementById("chipCount").textContent = `Count: ${items.length}`;
+
+        // hide error if load ok
+        document.getElementById("error").style.display = "none";
+
+      } catch (e) {
+        showError(
+          `خطا در دریافت داده از سرور.\n\n` +
+          `- اگر API روی لپ‌تاپ شماست (127.0.0.1)، GitHub Pages به آن دسترسی ندارد.\n` +
+          `- API باید آنلاین باشد و CORS اجازه بدهد.\n\n` +
+          `جزئیات خطا:\n${String(e)}`
+        );
+      }
+    }
+
+    // محاسبه زمان باقی‌مانده برای آیتم‌های ترتیبی
+    function computeSequential(items, startedAtMs) {
+      // خروجی: آرایه‌ای از { item, itemStart, itemEnd, leftMs, gapMs, cumulativeStartOffset }
+      let offset = 0;
+      const out = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const gapMs = Number(it.gap_ms || 0); // فاصله قبل از شروع همین آیتم
+        offset += gapMs;
+
+        const itemStart = startedAtMs + offset;
+        const itemEnd = itemStart + Number(it.duration_ms || 0);
+
+        out.push({
+          item: it,
+          gapMs,
+          itemStart,
+          itemEnd,
+          cumulativeStartOffset: offset,
+        });
+
+        offset += Number(it.duration_ms || 0);
+      }
+
+      return out;
     }
 
     function render() {
-      const now = Date.now();
       const list = document.getElementById("list");
-      list.innerHTML = timers.map(t => {
-        const endAt = t.start_at_ms + t.duration_ms;
-        const left = endAt - now;
+
+      if (!sid) {
+        list.innerHTML = "";
+        return;
+      }
+
+      if (!session) {
+        list.innerHTML = `<div class="muted">در حال بارگذاری…</div>`;
+        return;
+      }
+
+      if (!items.length) {
+        list.innerHTML = `<div class="muted">هیچ تایمری برای این سشن ثبت نشده.</div>`;
+        return;
+      }
+
+      const now = Date.now();
+      const startedAt = session.started_at_ms;
+
+      // اگر هنوز شروع نشده: فقط لیست + فاصله‌ها را نمایش بده
+      if (session.status === "pending" || !startedAt) {
+        list.innerHTML = items
+          .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+          .map((t, idx) => {
+            const gapMs = Number(t.gap_ms || 0);
+            return `
+              <div class="card">
+                <div class="title">
+                  <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
+                  <span class="badge">ثبت شده</span>
+                </div>
+                <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
+                <div class="sub">
+                  <span>فاصله قبل از این تایمر: ${fmt(gapMs)}</span>
+                  <span>order: ${t.order_index ?? idx}</span>
+                </div>
+              </div>
+            `;
+          }).join("");
+        return;
+      }
+
+      // حالت running (یا هر حالت شروع‌شده): تایمرها ترتیبی اجرا می‌شوند
+      const seq = computeSequential(
+        items.sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0)),
+        Number(startedAt)
+      );
+
+      list.innerHTML = seq.map((x, idx) => {
+        const left = x.itemEnd - now;
+        const isDone = left <= 0;
+
+        // وضعیت: اگر هنوز شروع نشده (در آینده) => آماده‌سازی
+        const notStartedYet = now < x.itemStart;
+        const badge =
+          isDone ? "تمام شد" :
+          notStartedYet ? "در صف" :
+          "در حال اجرا";
+
+        const badgeHtml = `<span class="badge">${badge}</span>`;
+
+        // اگر هنوز شروع نشده، می‌تونیم زمان تا شروع رو هم نشون بدیم
+        const untilStart = x.itemStart - now;
+
         return `
           <div class="card">
-            <div class="title">${t.title}</div>
-            <div class="time">${fmt(left)}</div>
+            <div class="title">
+              <span>#${idx+1} ${x.item.title ? `— ${escapeHtml(x.item.title)}` : ""}</span>
+              ${badgeHtml}
+            </div>
+
+            <div class="time">
+              ${notStartedYet ? fmt(x.itemEnd - x.itemStart) : fmt(left)}
+            </div>
+
+            <div class="sub">
+              <span>فاصله قبل: ${fmt(x.gapMs)}</span>
+              <span>شروع در: ${fmt(x.cumulativeStartOffset)}</span>
+              ${notStartedYet ? `<span>تا شروع: ${fmt(untilStart)}</span>` : ""}
+            </div>
           </div>
         `;
       }).join("");
     }
 
-    // نمایش یک سری اطلاعات زمینه‌ای (بعداً خیلی به درد می‌خورد)
-    const chatId = tg.initDataUnsafe?.chat?.id;
-    const chatType = tg.initDataUnsafe?.chat_type;
-    const startParam = tg.initDataUnsafe?.start_param; // وقتی با startapp باز کنی می‌آید
-    document.getElementById("meta").innerText =
-      `chat_id: ${chatId ?? "-"} | chat_type: ${chatType ?? "-"} | start_param: ${startParam ?? "-"}`;
+    // جلوگیری از تزریق HTML در title
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
 
-    render();
-    setInterval(render, 200); // این “لایو” بودن را می‌سازد
+    // Boot
+    (async () => {
+      await load();
+      render();
+
+      // رندر لایو
+      setInterval(render, 200);
+
+      // سینک سبک
+      setInterval(load, 5000);
+    })();
   </script>
 </body>
 </html>
