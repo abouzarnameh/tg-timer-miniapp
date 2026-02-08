@@ -46,12 +46,28 @@
       color: #111;
     }
     .btn:active { transform: scale(0.99); }
-    .link { text-decoration: none; color: inherit; }
+
+    .inp {
+      padding:10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--bd);
+      outline: none;
+      font-weight: 700;
+      width: 160px;
+    }
+    .inp2 {
+      padding:10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--bd);
+      outline: none;
+      font-weight: 700;
+      width: 220px;
+    }
   </style>
 </head>
 
 <body>
-  <h3 id="pageTitle">تایمرها</h3>
+  <h3 id="pageTitle">تایمرهای من</h3>
   <div class="muted" id="meta">در حال بارگذاری…</div>
 
   <div class="row" id="chips" style="display:none;">
@@ -59,9 +75,14 @@
   </div>
 
   <div class="row" id="controls" style="display:none;">
+    <input class="inp" id="inpTime" placeholder="00.00.00" />
+    <input class="inp2" id="inpTitle" placeholder="عنوان (اختیاری)" />
+    <button class="btn" id="btnAdd">➕ اضافه کن</button>
+  </div>
+
+  <div class="row" id="controls2" style="display:none;">
     <button class="btn" id="btnStart" style="display:none;">▶️ شروع همه</button>
     <button class="btn" id="btnRefresh">🔄 بروزرسانی</button>
-    <a class="btn" id="btnBack" href="./" style="display:none;">⬅️ همه سشن‌ها</a>
   </div>
 
   <div id="content"></div>
@@ -72,11 +93,6 @@
 
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand?.(); }
-
-    function qs(name) {
-      const url = new URL(window.location.href);
-      return url.searchParams.get(name);
-    }
 
     function showError(text) {
       const el = document.getElementById("error");
@@ -120,128 +136,118 @@
         .replaceAll("'","&#039;");
     }
 
-    const sid = qs("sid"); // اگر نبود => لیست سشن‌ها
+    function parseTimeToMs(text) {
+      text = String(text).trim();
+      const parts = text.split(".");
+      if (parts.length !== 3) throw new Error("فرمت باید HH.MM.SS باشد (مثلاً 01.22.30)");
+
+      const hh = parseInt(parts[0]);
+      const mm = parseInt(parts[1]);
+      const ss = parseInt(parts[2]);
+
+      if (isNaN(hh) || isNaN(mm) || isNaN(ss)) throw new Error("عددها معتبر نیستند");
+      if (mm < 0 || mm > 59) throw new Error("دقیقه باید بین 00 تا 59 باشد");
+      if (ss < 0 || ss > 59) throw new Error("ثانیه باید بین 00 تا 59 باشد");
+
+      const total = hh * 3600 + mm * 60 + ss;
+      if (total <= 0) throw new Error("زمان باید بیشتر از صفر باشد");
+
+      return total * 1000;
+    }
+
+    // DOM
     const content = document.getElementById("content");
     const controls = document.getElementById("controls");
-    const btnStart = document.getElementById("btnStart");
-    const btnRefresh = document.getElementById("btnRefresh");
-    const btnBack = document.getElementById("btnBack");
+    const controls2 = document.getElementById("controls2");
+
     const chips = document.getElementById("chips");
     const chipInfo = document.getElementById("chipInfo");
-    const pageTitle = document.getElementById("pageTitle");
 
+    const inpTime = document.getElementById("inpTime");
+    const inpTitle = document.getElementById("inpTitle");
+
+    const btnAdd = document.getElementById("btnAdd");
+    const btnStart = document.getElementById("btnStart");
+    const btnRefresh = document.getElementById("btnRefresh");
+
+    // State
+    let creatorId = null;
+    let sid = null;
     let session = null;
     let items = [];
-    let sessionsList = [];
 
-    btnRefresh.onclick = async () => { await boot(); };
+    async function getPendingSession() {
+      const res = await fetch(`${API_BASE}/session/pending_simple?creator_id=${encodeURIComponent(creatorId)}`, {
+        method: "POST",
+        headers: { "Accept": "application/json" },
+      });
 
-    btnStart.onclick = async () => {
-      if (!sid) return;
-      try {
-        clearError();
-        const r = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/start`, { method: "POST" });
-        const data = await r.json();
-        if (data.error) { showError("خطا در شروع: " + data.error); return; }
-        await loadSession();
-        renderSession();
-      } catch (e) {
-        showError("خطا در شروع: " + String(e));
-      }
-    };
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      if (!data.sid) throw new Error("API sid نداد");
+
+      sid = data.sid;
+    }
 
     async function loadSession() {
       const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
-        method: "GET", headers: { "Accept": "application/json" },
+        method: "GET",
+        headers: { "Accept": "application/json" },
       });
+
       if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
       const data = await res.json();
-      if (data.error) return { error: data.error };
+
+      if (data.error) throw new Error("API says: " + data.error);
+
       session = data.session;
       items = Array.isArray(data.items) ? data.items : [];
-      return { ok: true };
     }
 
-    async function loadSessionsList() {
-      // از تلگرام user_id می‌گیریم
-      const creatorId = tg?.initDataUnsafe?.user?.id;
-      if (!creatorId) {
-        return { error: "user_id از تلگرام نیومد. این صفحه را از داخل تلگرام باز کن." };
-      }
+    async function addTimer(durationMs, title) {
+      const payload = {
+        duration_ms: durationMs,
+        title: title || null
+      };
 
-      const res = await fetch(`${API_BASE}/sessions_by_creator?creator_id=${encodeURIComponent(creatorId)}`, {
-        method: "GET", headers: { "Accept": "application/json" },
+      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
       const data = await res.json();
-      sessionsList = Array.isArray(data) ? data : [];
-      return { ok: true, creatorId };
+      if (data.error) throw new Error("API says: " + data.error);
     }
 
-    function renderSessionsList(creatorId) {
-      pageTitle.textContent = "سشن‌های من";
-      controls.style.display = "flex";
-      btnStart.style.display = "none";
-      btnBack.style.display = "none";
+    async function startAll() {
+      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/start`, {
+        method: "POST"
+      });
 
-      chips.style.display = "flex";
-      chipInfo.textContent = `user_id: ${creatorId} | sessions: ${sessionsList.length}`;
-
-      setMeta("یک سشن را انتخاب کن تا واردش شوی و Start بزنی.");
-
-      if (sessionsList.length === 0) {
-        content.innerHTML = `<div class="muted">هنوز هیچ سشنی نداری. از داخل گروه با /add و /run بساز.</div>`;
-        return;
-      }
-
-      content.innerHTML = sessionsList.map(s => {
-        const link = `./?sid=${s.id}`;
-        return `
-          <a class="link" href="${link}">
-            <div class="card">
-              <div class="title">
-                <span>#${s.id}</span>
-                <span class="badge">${statusLabel(s.status)}</span>
-              </div>
-              <div class="sub">
-                <span>items: ${s.item_count}</span>
-                <span>chat_id: ${s.chat_id}</span>
-              </div>
-            </div>
-          </a>
-        `;
-      }).join("");
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      if (data.error) throw new Error("API says: " + data.error);
     }
 
-    function renderSession() {
-      pageTitle.textContent = `سشن #${sid}`;
-      controls.style.display = "flex";
-      btnBack.style.display = "inline-block";
-      btnBack.href = "./";
-
+    function render() {
       chips.style.display = "flex";
       chipInfo.textContent = `sid: ${sid} | status: ${statusLabel(session?.status)} | items: ${items.length}`;
 
-      const chatId = tg?.initDataUnsafe?.chat?.id;
-      const chatType = tg?.initDataUnsafe?.chat_type;
-      setMeta(
-        `وضعیت: ${statusLabel(session?.status)}`
-        + (chatId ? ` | chat_id: ${chatId}` : "")
-        + (chatType ? ` | chat_type: ${chatType}` : "")
-      );
+      setMeta(`وضعیت: ${statusLabel(session?.status)}`);
 
-      // Start فقط وقتی pending باشد
+      // اگر pending بود، start نمایش بده
       btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
 
       if (!items.length) {
-        content.innerHTML = `<div class="muted">هیچ تایمری برای این سشن ثبت نشده.</div>`;
+        content.innerHTML = `<div class="muted">هنوز تایمری اضافه نکردی.</div>`;
         return;
       }
 
       const now = Date.now();
 
-      // pending: فقط مدت‌ها
+      // pending: فقط مدت
       if (session.status === "pending" || !session.started_at_ms) {
         content.innerHTML = items
           .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
@@ -259,12 +265,14 @@
 
       // running: همه همزمان
       const startedAt = Number(session.started_at_ms);
+
       content.innerHTML = items
         .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
         .map((t, idx) => {
           const endAt = startedAt + Number(t.duration_ms || 0);
           const left = endAt - now;
           const isDone = left <= 0;
+
           return `
             <div class="card">
               <div class="title">
@@ -272,61 +280,91 @@
                 <span class="badge">${isDone ? "تمام شد" : "در حال اجرا"}</span>
               </div>
               <div class="time">${fmt(left)}</div>
-              <div class="sub"><span>مدت: ${fmt(Number(t.duration_ms||0))}</span></div>
+              <div class="sub"><span>مدت: ${fmt(Number(t.duration_ms || 0))}</span></div>
             </div>
           `;
         }).join("");
     }
 
-    async function boot() {
-      clearError();
-
+    btnAdd.onclick = async () => {
       try {
-        if (!sid) {
-          const r = await loadSessionsList();
-          if (r.error) { showError(r.error); return; }
-          renderSessionsList(r.creatorId);
+        clearError();
+        const timeText = inpTime.value.trim();
+        const title = inpTitle.value.trim();
+
+        const durationMs = parseTimeToMs(timeText);
+
+        await addTimer(durationMs, title);
+
+        inpTime.value = "";
+        inpTitle.value = "";
+
+        await loadSession();
+        render();
+
+      } catch (e) {
+        showError(String(e));
+      }
+    };
+
+    btnStart.onclick = async () => {
+      try {
+        clearError();
+        await startAll();
+        await loadSession();
+        render();
+      } catch (e) {
+        showError(String(e));
+      }
+    };
+
+    btnRefresh.onclick = async () => {
+      try {
+        clearError();
+        await loadSession();
+        render();
+      } catch (e) {
+        showError(String(e));
+      }
+    };
+
+    async function boot() {
+      try {
+        clearError();
+
+        creatorId = tg?.initDataUnsafe?.user?.id;
+        if (!creatorId) {
+          showError("user_id از تلگرام دریافت نشد. لطفاً از داخل تلگرام باز کن.");
           return;
         }
 
-        const r = await loadSession();
-        if (r.error) {
-          pageTitle.textContent = `سشن #${sid}`;
-          controls.style.display = "flex";
-          btnBack.style.display = "inline-block";
-          btnBack.href = "./";
-          btnStart.style.display = "none";
-          chips.style.display = "flex";
-          chipInfo.textContent = `sid: ${sid}`;
-          setMeta("این sid پیدا نشد.");
-          showError("این sid پیدا نشد (not_found). احتمالاً هنوز ساخته نشده.");
-          content.innerHTML = "";
-          return;
-        }
+        controls.style.display = "flex";
+        controls2.style.display = "flex";
 
-        renderSession();
+        await getPendingSession();
+        await loadSession();
+        render();
 
       } catch (e) {
         showError("خطا: " + String(e));
       }
     }
 
-    // Boot + live
     (async () => {
       await boot();
 
-      // لایو فقط وقتی داخل یک سشن هستیم
+      // رندر لایو
       setInterval(() => {
-        if (sid && session && session.status === "running") {
-          renderSession();
+        if (session && session.status === "running") {
+          render();
         }
       }, 200);
 
       // سینک سبک
       setInterval(async () => {
-        if (sid) {
-          try { await loadSession(); } catch {}
-        }
+        try {
+          if (sid) await loadSession();
+        } catch {}
       }, 5000);
     })();
   </script>
