@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>تایمرهای گروه</title>
+
+  <!-- کتابخانه رسمی تلگرام برای Mini App -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    body { font-family: sans-serif; padding: 14px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin: 10px 0; }
+    .title { font-weight: 700; margin-bottom: 6px; }
+    .time { font-size: 22px; }
+    .muted { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>تایمرهای فعال</h3>
+  <div class="muted" id="meta"></div>
+  <div id="list"></div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+
+    // فعلاً تایمرها را “فیک” می‌گذاریم تا لایو بودن را ببینی
+    // در مراحل بعد، همین را از سرور می‌گیریم
+    const demoTimers = [
+      { title: "تایمر ۱", start_at_ms: Date.now() - 10_000, duration_ms: 5 * 60_000 },
+      { title: "تایمر ۲", start_at_ms: Date.now() - 2_000,  duration_ms: 30_000 },
+    ];
+
+    let timers = demoTimers;
+
+    function fmt(ms) {
+      ms = Math.max(0, ms);
+      const s = Math.floor(ms / 1000);
+      const hh = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = s % 60;
+      return (hh > 0 ? String(hh).padStart(2,'0') + ":" : "") +
+             String(mm).padStart(2,'0') + ":" +
+             String(ss).padStart(2,'0');
+    }
+
+    function render() {
+      const now = Date.now();
+      const list = document.getElementById("list");
+      list.innerHTML = timers.map(t => {
+        const endAt = t.start_at_ms + t.duration_ms;
+        const left = endAt - now;
+        return `
+          <div class="card">
+            <div class="title">${t.title}</div>
+            <div class="time">${fmt(left)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // نمایش یک سری اطلاعات زمینه‌ای (بعداً خیلی به درد می‌خورد)
+    const chatId = tg.initDataUnsafe?.chat?.id;
+    const chatType = tg.initDataUnsafe?.chat_type;
+    const startParam = tg.initDataUnsafe?.start_param; // وقتی با startapp باز کنی می‌آید
+    document.getElementById("meta").innerText =
+      `chat_id: ${chatId ?? "-"} | chat_type: ${chatType ?? "-"} | start_param: ${startParam ?? "-"}`;
+
+    render();
+    setInterval(render, 200); // این “لایو” بودن را می‌سازد
+  </script>
+</body>
+</html>
