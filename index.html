@@ -8,22 +8,48 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
-    :root { --bd:#e6e6e6; --muted:#6b7280; }
+    :root { --bd:#e6e6e6; --muted:#6b7280; --danger:#dc2626; }
     body { font-family: sans-serif; padding: 14px; margin: 0; }
     h3 { margin: 0 0 8px 0; }
     .muted { color: var(--muted); font-size: 13px; margin-bottom: 10px; line-height: 1.6; }
     .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 14px; }
     .pill { border:1px solid var(--bd); border-radius:999px; padding:6px 10px; font-size:13px; }
+
     .card {
       border: 1px solid var(--bd);
       border-radius: 14px;
       padding: 12px;
       margin: 10px 0;
     }
-    .title { font-weight: 800; margin-bottom: 8px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
-    .badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--bd); color: #111; }
+
+    .title {
+      font-weight: 800;
+      margin-bottom: 8px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--bd);
+      color: #111;
+    }
+
     .time { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
-    .sub { margin-top: 8px; color: var(--muted); font-size: 13px; display:flex; gap:12px; flex-wrap:wrap; }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
     .err {
       border: 1px solid #fca5a5;
       background: #fff1f2;
@@ -34,6 +60,7 @@
       margin-top: 12px;
       white-space: pre-wrap;
     }
+
     .btn {
       display:inline-block;
       padding:10px 12px;
@@ -45,7 +72,14 @@
       text-decoration: none;
       color: #111;
     }
+
     .btn:active { transform: scale(0.99); }
+
+    .btn-danger {
+      border: 1px solid #fecaca;
+      background: #fff1f2;
+      color: var(--danger);
+    }
 
     .inp {
       padding:10px 12px;
@@ -55,6 +89,7 @@
       font-weight: 700;
       width: 160px;
     }
+
     .inp2 {
       padding:10px 12px;
       border-radius: 12px;
@@ -63,6 +98,8 @@
       font-weight: 700;
       width: 220px;
     }
+
+    .link { text-decoration: none; color: inherit; }
   </style>
 </head>
 
@@ -83,6 +120,7 @@
   <div class="row" id="controls2" style="display:none;">
     <button class="btn" id="btnStart" style="display:none;">▶️ شروع همه</button>
     <button class="btn" id="btnRefresh">🔄 بروزرسانی</button>
+    <button class="btn btn-danger" id="btnDeleteSession">🗑 حذف سشن</button>
   </div>
 
   <div id="content"></div>
@@ -169,12 +207,14 @@
     const btnAdd = document.getElementById("btnAdd");
     const btnStart = document.getElementById("btnStart");
     const btnRefresh = document.getElementById("btnRefresh");
+    const btnDeleteSession = document.getElementById("btnDeleteSession");
 
     // State
     let creatorId = null;
     let sid = null;
     let session = null;
     let items = [];
+    let serverOffset = 0;
 
     async function getPendingSession() {
       const res = await fetch(`${API_BASE}/session/pending_simple?creator_id=${encodeURIComponent(creatorId)}`, {
@@ -199,6 +239,8 @@
       const data = await res.json();
 
       if (data.error) throw new Error("API says: " + data.error);
+
+      serverOffset = data.server_now_ms - Date.now();
 
       session = data.session;
       items = Array.isArray(data.items) ? data.items : [];
@@ -231,13 +273,32 @@
       if (data.error) throw new Error("API says: " + data.error);
     }
 
+    async function deleteItem(itemId) {
+      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/item/${encodeURIComponent(itemId)}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      if (data.error) throw new Error("API says: " + data.error);
+    }
+
+    async function deleteSession() {
+      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      if (data.error) throw new Error("API says: " + data.error);
+    }
+
     function render() {
       chips.style.display = "flex";
       chipInfo.textContent = `sid: ${sid} | status: ${statusLabel(session?.status)} | items: ${items.length}`;
 
       setMeta(`وضعیت: ${statusLabel(session?.status)}`);
 
-      // اگر pending بود، start نمایش بده
       btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
 
       if (!items.length) {
@@ -245,9 +306,8 @@
         return;
       }
 
-      const now = Date.now();
+      const now = Date.now() + serverOffset;
 
-      // pending: فقط مدت
       if (session.status === "pending" || !session.started_at_ms) {
         content.innerHTML = items
           .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
@@ -255,7 +315,7 @@
             <div class="card">
               <div class="title">
                 <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                <span class="badge">ثبت شده</span>
+                <button class="btn btn-danger" onclick="window.deleteTimer(${t.id})">حذف</button>
               </div>
               <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
             </div>
@@ -263,7 +323,6 @@
         return;
       }
 
-      // running: همه همزمان
       const startedAt = Number(session.started_at_ms);
 
       content.innerHTML = items
@@ -277,7 +336,7 @@
             <div class="card">
               <div class="title">
                 <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                <span class="badge">${isDone ? "تمام شد" : "در حال اجرا"}</span>
+                <button class="btn btn-danger" onclick="window.deleteTimer(${t.id})">حذف</button>
               </div>
               <div class="time">${fmt(left)}</div>
               <div class="sub"><span>مدت: ${fmt(Number(t.duration_ms || 0))}</span></div>
@@ -285,6 +344,17 @@
           `;
         }).join("");
     }
+
+    window.deleteTimer = async (itemId) => {
+      try {
+        clearError();
+        await deleteItem(itemId);
+        await loadSession();
+        render();
+      } catch (e) {
+        showError(String(e));
+      }
+    };
 
     btnAdd.onclick = async () => {
       try {
@@ -328,6 +398,24 @@
       }
     };
 
+    btnDeleteSession.onclick = async () => {
+      try {
+        clearError();
+
+        if (!confirm("سشن و همه تایمرهای آن حذف شود؟")) return;
+
+        await deleteSession();
+
+        // سشن جدید بساز
+        await getPendingSession();
+        await loadSession();
+        render();
+
+      } catch (e) {
+        showError(String(e));
+      }
+    };
+
     async function boot() {
       try {
         clearError();
@@ -353,14 +441,12 @@
     (async () => {
       await boot();
 
-      // رندر لایو
       setInterval(() => {
         if (session && session.status === "running") {
           render();
         }
       }, 200);
 
-      // سینک سبک
       setInterval(async () => {
         try {
           if (sid) await loadSession();
