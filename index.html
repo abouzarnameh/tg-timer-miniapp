@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>تایمرها</title>
+  <title>تایمرهای گروه</title>
 
-  <!-- Telegram Mini App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
@@ -59,30 +58,26 @@
     <span class="pill" id="chipCount"></span>
   </div>
 
+  <div class="row">
+    <button class="btn" id="btnStart" style="display:none;">▶️ شروع همه</button>
+    <button class="btn" id="btnRefresh">🔄 بروزرسانی</button>
+  </div>
+
   <div class="list" id="list"></div>
   <div id="error" class="err" style="display:none;"></div>
 
   <script>
-    // ----------------------------
-    // Settings
-    // ----------------------------
-    // IMPORTANT: اگر مینی اپ روی GitHub Pages است، API_BASE باید آنلاین و HTTPS باشد
-    // مثال: https://your-domain.com
+    // ========= تنظیمات =========
     const API_BASE = "https://tg-timer-api.onrender.com";
- // بعداً آنلاینش کن
 
-    // ----------------------------
-    // Telegram WebApp
-    // ----------------------------
+    // ========= تلگرام =========
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand?.();
     }
 
-    // ----------------------------
-    // Helpers
-    // ----------------------------
+    // ========= Helpers =========
     function qs(name) {
       const url = new URL(window.location.href);
       return url.searchParams.get(name);
@@ -92,6 +87,12 @@
       const el = document.getElementById("error");
       el.style.display = "block";
       el.textContent = text;
+    }
+
+    function clearError() {
+      const el = document.getElementById("error");
+      el.style.display = "none";
+      el.textContent = "";
     }
 
     function setMeta(text) {
@@ -115,49 +116,79 @@
       return status || "-";
     }
 
-    // ----------------------------
-    // State
-    // ----------------------------
-    const sid = qs("sid"); // مثال: ?sid=42
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // ========= State =========
+    const sid = qs("sid");
     let session = null;
     let items = [];
 
-    // هر آیتم می‌تونه این فیلدها رو داشته باشه:
-    // - duration_ms (اجباری)
-    // - title (اختیاری)
-    // - order_index (اجباری)
-    // - gap_ms (اختیاری): فاصله قبل از شروع همین آیتم نسبت به قبلی (به میلی‌ثانیه)
-    //
-    // اگر gap_ms نداری، پیش‌فرض 0 حساب می‌کنیم.
+    const btnStart = document.getElementById("btnStart");
+    const btnRefresh = document.getElementById("btnRefresh");
+
+    btnRefresh.onclick = async () => { await load(); render(); };
+
+    btnStart.onclick = async () => {
+      if (!sid) return;
+      try {
+        clearError();
+        const r = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/start`, { method: "POST" });
+        const data = await r.json();
+        if (data.error) {
+          showError("خطا در شروع: " + data.error);
+          return;
+        }
+        await load();
+        render();
+      } catch (e) {
+        showError("خطا در شروع: " + String(e));
+      }
+    };
 
     async function load() {
       if (!sid) {
-        setMeta("❌ sid پیدا نشد. باید از داخل لینک/دکمه‌ی بات وارد این صفحه شوید.");
+        setMeta("❌ sid پیدا نشد. باید از لینک بات وارد شوی (مثلاً .../?sid=12).");
         document.getElementById("chips").style.display = "none";
         document.getElementById("list").innerHTML = "";
+        btnStart.style.display = "none";
         return;
       }
 
       try {
+        clearError();
+
         const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
           method: "GET",
           headers: { "Accept": "application/json" },
         });
 
-        if (!res.ok) {
-          throw new Error(`API error: ${res.status} ${res.statusText}`);
-        }
-
+        if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
         const data = await res.json();
 
         if (data.error) {
-          throw new Error(`API says: ${data.error}`);
+          // مثلا not_found
+          session = null;
+          items = [];
+          setMeta(`sid=#${sid} | خطا: ${data.error}`);
+          document.getElementById("chips").style.display = "flex";
+          document.getElementById("chipSid").textContent = `SID: ${sid}`;
+          document.getElementById("chipStatus").textContent = `Status: -`;
+          document.getElementById("chipCount").textContent = `Count: 0`;
+          btnStart.style.display = "none";
+          showError("این sid پیدا نشد. احتمالاً هنوز توسط بات ساخته نشده.");
+          return;
         }
 
         session = data.session;
         items = Array.isArray(data.items) ? data.items : [];
 
-        // UI meta
         const chatId = tg?.initDataUnsafe?.chat?.id;
         const chatType = tg?.initDataUnsafe?.chat_type;
 
@@ -172,45 +203,15 @@
         document.getElementById("chipStatus").textContent = `Status: ${statusLabel(session?.status)}`;
         document.getElementById("chipCount").textContent = `Count: ${items.length}`;
 
-        // hide error if load ok
-        document.getElementById("error").style.display = "none";
+        // اگر pending بود، دکمه شروع رو نشون بده
+        btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
 
       } catch (e) {
         showError(
           `خطا در دریافت داده از سرور.\n\n` +
-          `- اگر API روی لپ‌تاپ شماست (127.0.0.1)، GitHub Pages به آن دسترسی ندارد.\n` +
-          `- API باید آنلاین باشد و CORS اجازه بدهد.\n\n` +
           `جزئیات خطا:\n${String(e)}`
         );
       }
-    }
-
-    // محاسبه زمان باقی‌مانده برای آیتم‌های ترتیبی
-    function computeSequential(items, startedAtMs) {
-      // خروجی: آرایه‌ای از { item, itemStart, itemEnd, leftMs, gapMs, cumulativeStartOffset }
-      let offset = 0;
-      const out = [];
-
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const gapMs = Number(it.gap_ms || 0); // فاصله قبل از شروع همین آیتم
-        offset += gapMs;
-
-        const itemStart = startedAtMs + offset;
-        const itemEnd = itemStart + Number(it.duration_ms || 0);
-
-        out.push({
-          item: it,
-          gapMs,
-          itemStart,
-          itemEnd,
-          cumulativeStartOffset: offset,
-        });
-
-        offset += Number(it.duration_ms || 0);
-      }
-
-      return out;
     }
 
     function render() {
@@ -232,90 +233,58 @@
       }
 
       const now = Date.now();
-      const startedAt = session.started_at_ms;
 
-      // اگر هنوز شروع نشده: فقط لیست + فاصله‌ها را نمایش بده
-      if (session.status === "pending" || !startedAt) {
+      // اگر هنوز شروع نشده: فقط مدت‌ها رو نشون بده
+      if (session.status === "pending" || !session.started_at_ms) {
         list.innerHTML = items
           .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-          .map((t, idx) => {
-            const gapMs = Number(t.gap_ms || 0);
-            return `
-              <div class="card">
-                <div class="title">
-                  <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                  <span class="badge">ثبت شده</span>
-                </div>
-                <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
-                <div class="sub">
-                  <span>فاصله قبل از این تایمر: ${fmt(gapMs)}</span>
-                  <span>order: ${t.order_index ?? idx}</span>
-                </div>
+          .map((t, idx) => `
+            <div class="card">
+              <div class="title">
+                <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
+                <span class="badge">ثبت شده</span>
               </div>
-            `;
-          }).join("");
+              <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
+              <div class="sub">
+                <span>مدت: ${fmt(Number(t.duration_ms || 0))}</span>
+              </div>
+            </div>
+          `).join("");
         return;
       }
 
-      // حالت running (یا هر حالت شروع‌شده): تایمرها ترتیبی اجرا می‌شوند
-      const seq = computeSequential(
-        items.sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0)),
-        Number(startedAt)
-      );
+      // ===== حالت running: همه همزمان شروع می‌شوند =====
+      const startedAt = Number(session.started_at_ms);
 
-      list.innerHTML = seq.map((x, idx) => {
-        const left = x.itemEnd - now;
-        const isDone = left <= 0;
+      list.innerHTML = items
+        .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+        .map((t, idx) => {
+          const endAt = startedAt + Number(t.duration_ms || 0);
+          const left = endAt - now;
+          const isDone = left <= 0;
 
-        // وضعیت: اگر هنوز شروع نشده (در آینده) => آماده‌سازی
-        const notStartedYet = now < x.itemStart;
-        const badge =
-          isDone ? "تمام شد" :
-          notStartedYet ? "در صف" :
-          "در حال اجرا";
+          const badge = isDone ? "تمام شد" : "در حال اجرا";
 
-        const badgeHtml = `<span class="badge">${badge}</span>`;
-
-        // اگر هنوز شروع نشده، می‌تونیم زمان تا شروع رو هم نشون بدیم
-        const untilStart = x.itemStart - now;
-
-        return `
-          <div class="card">
-            <div class="title">
-              <span>#${idx+1} ${x.item.title ? `— ${escapeHtml(x.item.title)}` : ""}</span>
-              ${badgeHtml}
+          return `
+            <div class="card">
+              <div class="title">
+                <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
+                <span class="badge">${badge}</span>
+              </div>
+              <div class="time">${fmt(left)}</div>
+              <div class="sub">
+                <span>مدت: ${fmt(Number(t.duration_ms || 0))}</span>
+              </div>
             </div>
-
-            <div class="time">
-              ${notStartedYet ? fmt(x.itemEnd - x.itemStart) : fmt(left)}
-            </div>
-
-            <div class="sub">
-              <span>فاصله قبل: ${fmt(x.gapMs)}</span>
-              <span>شروع در: ${fmt(x.cumulativeStartOffset)}</span>
-              ${notStartedYet ? `<span>تا شروع: ${fmt(untilStart)}</span>` : ""}
-            </div>
-          </div>
-        `;
-      }).join("");
+          `;
+        }).join("");
     }
 
-    // جلوگیری از تزریق HTML در title
-    function escapeHtml(str) {
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    // Boot
     (async () => {
       await load();
       render();
 
-      // رندر لایو
+      // لایو
       setInterval(render, 200);
 
       // سینک سبک
@@ -324,4 +293,3 @@
   </script>
 </body>
 </html>
-
