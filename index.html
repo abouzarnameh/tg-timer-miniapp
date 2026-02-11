@@ -3,134 +3,173 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Timers</title>
+  <title>Bomb Base Sync</title>
 
+  <!-- Telegram Mini App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
-    :root { --bd:#e6e6e6; --muted:#6b7280; --danger:#dc2626; }
-    body { font-family: sans-serif; padding: 14px; margin: 0; }
-    h3 { margin: 0 0 8px 0; }
-    .muted { color: var(--muted); font-size: 13px; margin-bottom: 10px; line-height: 1.6; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 14px; }
-    .pill { border:1px solid var(--bd); border-radius:999px; padding:6px 10px; font-size:13px; }
-
-    .card {
-      border: 1px solid var(--bd);
-      border-radius: 14px;
-      padding: 12px;
-      margin: 10px 0;
+    :root{
+      --bd:#e6e6e6; --muted:#6b7280; --danger:#dc2626; --ok:#16a34a;
+      --bg:#ffffff; --chip:#f8fafc;
     }
-
-    .title {
-      font-weight: 800;
-      margin-bottom: 8px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
+    body{ font-family: sans-serif; padding:14px; margin:0; background:var(--bg); }
+    h3{ margin:0 0 8px 0; }
+    .muted{ color:var(--muted); font-size:13px; margin:8px 0; line-height:1.7; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 14px; }
+    .pill{ border:1px solid var(--bd); border-radius:999px; padding:6px 10px; font-size:13px; background:var(--chip); }
+    .card{ border:1px solid var(--bd); border-radius:14px; padding:12px; margin:10px 0; }
+    .title{ font-weight:800; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .badge{ font-size:12px; padding:4px 8px; border-radius:999px; border:1px solid var(--bd); color:#111; background:#fff; }
+    .badge.ok{ border-color:#bbf7d0; color:#166534; background:#f0fdf4; }
+    .badge.warn{ border-color:#fed7aa; color:#9a3412; background:#fff7ed; }
+    .badge.bad{ border-color:#fecaca; color:#991b1b; background:#fef2f2; }
+    .time{ font-size:22px; font-weight:900; letter-spacing:0.5px; }
+    .sub{ margin-top:8px; color:var(--muted); font-size:13px; display:flex; gap:12px; flex-wrap:wrap; }
+    .err{
+      border:1px solid #fca5a5; background:#fff1f2; color:#9f1239;
+      padding:10px; border-radius:12px; line-height:1.6; margin-top:12px; white-space:pre-wrap;
+      display:none;
     }
-
-    .badge {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--bd);
-      color: #111;
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+    input, select{
+      width:100%; box-sizing:border-box; padding:10px 10px; border-radius:12px;
+      border:1px solid var(--bd); outline:none; font-size:14px; background:#fff;
     }
-
-    .time { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
-
-    .sub {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 13px;
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
+    .btnrow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .btn{
+      padding:10px 12px; border-radius:12px; border:1px solid var(--bd);
+      background:#fff; cursor:pointer; font-weight:800;
     }
-
-    .err {
-      border: 1px solid #fca5a5;
-      background: #fff1f2;
-      color: #9f1239;
-      padding: 10px;
-      border-radius: 12px;
-      line-height: 1.6;
-      margin-top: 12px;
-      white-space: pre-wrap;
-    }
-
-    .btn {
-      display:inline-block;
-      padding:10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--bd);
-      background: white;
-      cursor: pointer;
-      font-weight: 800;
-      text-decoration: none;
-      color: #111;
-    }
-
-    .btn:active { transform: scale(0.99); }
-
-    .btn-danger {
-      border: 1px solid #fecaca;
-      background: #fff1f2;
-      color: var(--danger);
-    }
-
-    .inp {
-      padding:10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--bd);
-      outline: none;
-      font-weight: 700;
-      width: 160px;
-    }
-
-    .inp2 {
-      padding:10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--bd);
-      outline: none;
-      font-weight: 700;
-      width: 220px;
-    }
-
-    .link { text-decoration: none; color: inherit; }
+    .btn.primary{ border-color:#93c5fd; background:#eff6ff; }
+    .btn.danger{ border-color:#fecaca; background:#fef2f2; color:#991b1b; }
+    .btn:active{ transform:scale(0.99); }
+    .small{ font-size:12px; color:var(--muted); }
+    .hr{ height:1px; background:var(--bd); margin:12px 0; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   </style>
 </head>
 
 <body>
-  <h3 id="pageTitle">تایمرهای من</h3>
+  <h3>Sync اتک‌ها (Bomb Base)</h3>
   <div class="muted" id="meta">در حال بارگذاری…</div>
 
   <div class="row" id="chips" style="display:none;">
-    <span class="pill" id="chipInfo"></span>
+    <span class="pill" id="chipSid"></span>
+    <span class="pill" id="chipStatus"></span>
+    <span class="pill" id="chipCount"></span>
   </div>
 
-  <div class="row" id="controls" style="display:none;">
-    <input class="inp" id="inpTime" placeholder="00.00.00" />
-    <input class="inp2" id="inpTitle" placeholder="عنوان (اختیاری)" />
-    <button class="btn" id="btnAdd">➕ اضافه کن</button>
+  <div class="card">
+    <div class="title">
+      <span>تنظیمات هماهنگی</span>
+      <span class="badge" id="syncBadge">—</span>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <label>دیلی سرور (ثانیه)</label>
+        <input id="serverDelay" type="number" min="0" step="1" value="3"/>
+      </div>
+      <div>
+        <label>تلورانس هم‌زمانی (ثانیه)</label>
+        <input id="syncWindow" type="number" min="0" step="1" value="3"/>
+      </div>
+      <div>
+        <label>فاصله بین اولویت‌ها (ثانیه)</label>
+        <input id="gapBetweenPriorities" type="number" min="0" step="1" value="2"/>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label>بافر شروع (ثانیه)</label>
+        <input id="startBuffer" type="number" min="0" step="1" value="10"/>
+        <div class="small">برای اینکه هیچ‌کس لانچ منفی نگیرد (زمان برای آماده شدن).</div>
+      </div>
+      <div>
+        <label>قانون ترتیب برخورد</label>
+        <select id="hitOrderMode">
+          <option value="priority">بر اساس Priority (Attack #1 اول بخورد)</option>
+          <option value="sameHitAll">همه با هم بخورند (Priority فقط نمایش)</option>
+        </select>
+        <div class="small">در حالت Priority، هر اولویت یک زمان برخورد جدا دارد.</div>
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn primary" id="btnStart">شروع سشن (محاسبه لانچ‌ها)</button>
+      <button class="btn" id="btnRefresh">رفرش از سرور</button>
+      <button class="btn danger" id="btnResetLocal">ریست شروع (فقط همین صفحه)</button>
+    </div>
+
+    <div class="small" id="startInfo"></div>
   </div>
 
-  <div class="row" id="controls2" style="display:none;">
-    <button class="btn" id="btnStart" style="display:none;">▶️ شروع همه</button>
-    <button class="btn" id="btnRefresh">🔄 بروزرسانی</button>
-    <button class="btn btn-danger" id="btnDeleteSession">🗑 حذف سشن</button>
+  <div class="card">
+    <div class="title">
+      <span>ثبت اتک جدید</span>
+      <span class="badge">درجا به لیست اضافه می‌شود</span>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <label>نام/نوع اتک (مثلاً حسین - 220 Archer)</label>
+        <input id="inpTitle" placeholder="مثلاً حسین - 220 Archer"/>
+      </div>
+      <div>
+        <label>زمان مسیر (HH.MM.SS)</label>
+        <input id="inpTravel" placeholder="01.21.33" class="mono"/>
+      </div>
+      <div>
+        <label>اولویت برخورد (عدد)</label>
+        <input id="inpPriority" type="number" min="1" step="1" value="1"/>
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn primary" id="btnAdd">➕ اضافه کردن</button>
+      <button class="btn danger" id="btnClear">پاک کردن فیلدها</button>
+    </div>
+
+    <div class="small">نکته: Priority یعنی ترتیب برخورد. هرچی عدد کمتر، زودتر بخورد.</div>
   </div>
 
-  <div id="content"></div>
-  <div id="error" class="err" style="display:none;"></div>
+  <div class="hr"></div>
+
+  <div class="title" style="margin-top:6px;">
+    <span>لیست اتک‌ها و زمان لانچ</span>
+    <span class="badge" id="clockBadge">—</span>
+  </div>
+
+  <div id="list"></div>
+  <div id="error" class="err"></div>
 
   <script>
-    const API_BASE = "https://tg-timer-api.onrender.com";
+    // ============================
+    // CONFIG
+    // ============================
+    // اینو روی Render خودت تنظیم کن
+    const API_BASE = "https://YOUR-API.onrender.com";
 
+    // ============================
+    // Telegram WebApp
+    // ============================
     const tg = window.Telegram?.WebApp;
-    if (tg) { tg.ready(); tg.expand?.(); }
+    if (tg) {
+      tg.ready();
+      tg.expand?.();
+    }
+
+    // ============================
+    // Helpers
+    // ============================
+    function qs(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
 
     function showError(text) {
       const el = document.getElementById("error");
@@ -138,7 +177,7 @@
       el.textContent = text;
     }
 
-    function clearError() {
+    function hideError() {
       const el = document.getElementById("error");
       el.style.display = "none";
       el.textContent = "";
@@ -148,25 +187,8 @@
       document.getElementById("meta").textContent = text;
     }
 
-    function fmt(ms) {
-      ms = Math.max(0, ms);
-      const s = Math.floor(ms / 1000);
-      const hh = Math.floor(s / 3600);
-      const mm = Math.floor((s % 3600) / 60);
-      const ss = s % 60;
-      return `${String(hh).padStart(2,'0')}.${String(mm).padStart(2,'0')}.${String(ss).padStart(2,'0')}`;
-    }
-
-    function statusLabel(status) {
-      if (status === "pending") return "در انتظار شروع";
-      if (status === "running") return "در حال اجرا";
-      if (status === "stopped") return "متوقف شده";
-      if (status === "deleted") return "حذف شده";
-      return status || "-";
-    }
-
     function escapeHtml(str) {
-      return String(str)
+      return String(str ?? "")
         .replaceAll("&","&amp;")
         .replaceAll("<","&lt;")
         .replaceAll(">","&gt;")
@@ -174,285 +196,476 @@
         .replaceAll("'","&#039;");
     }
 
-    function parseTimeToMs(text) {
-      text = String(text).trim();
-      const parts = text.split(".");
-      if (parts.length !== 3) throw new Error("فرمت باید HH.MM.SS باشد (مثلاً 01.22.30)");
+    function pad2(n){ return String(n).padStart(2,"0"); }
 
-      const hh = parseInt(parts[0]);
-      const mm = parseInt(parts[1]);
-      const ss = parseInt(parts[2]);
-
-      if (isNaN(hh) || isNaN(mm) || isNaN(ss)) throw new Error("عددها معتبر نیستند");
-      if (mm < 0 || mm > 59) throw new Error("دقیقه باید بین 00 تا 59 باشد");
-      if (ss < 0 || ss > 59) throw new Error("ثانیه باید بین 00 تا 59 باشد");
-
-      const total = hh * 3600 + mm * 60 + ss;
-      if (total <= 0) throw new Error("زمان باید بیشتر از صفر باشد");
-
-      return total * 1000;
+    function fmtMs(ms) {
+      ms = Math.max(0, Math.floor(ms));
+      const s = Math.floor(ms / 1000);
+      const hh = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = s % 60;
+      return `${pad2(hh)}.${pad2(mm)}.${pad2(ss)}`;
     }
 
-    // DOM
-    const content = document.getElementById("content");
-    const controls = document.getElementById("controls");
-    const controls2 = document.getElementById("controls2");
+    // HH.MM.SS -> ms
+    function parseTimeToMs(text){
+      const t = String(text || "").trim();
+      const m = /^(\d{2,})\.(\d{2})\.(\d{2})$/.exec(t);
+      if(!m) throw new Error("فرمت زمان مسیر باید HH.MM.SS مثل 01.21.33 باشد");
+      const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3]);
+      if(mm>59 || ss>59) throw new Error("دقیقه و ثانیه باید بین 00 تا 59 باشد");
+      const total = hh*3600 + mm*60 + ss;
+      if(total<=0) throw new Error("زمان مسیر باید بزرگتر از صفر باشد");
+      return total*1000;
+    }
 
-    const chips = document.getElementById("chips");
-    const chipInfo = document.getElementById("chipInfo");
+    function statusLabel(status) {
+      if (status === "pending") return "در انتظار";
+      if (status === "running") return "در حال اجرا";
+      if (status === "stopped") return "متوقف";
+      if (status === "deleted") return "حذف";
+      return status || "-";
+    }
 
-    const inpTime = document.getElementById("inpTime");
-    const inpTitle = document.getElementById("inpTitle");
+    function getSettings(){
+      const serverDelaySec = Number(document.getElementById("serverDelay").value || 0);
+      const syncWindowSec  = Number(document.getElementById("syncWindow").value || 0);
+      const gapSec         = Number(document.getElementById("gapBetweenPriorities").value || 0);
+      const startBufferSec = Number(document.getElementById("startBuffer").value || 0);
+      const mode           = document.getElementById("hitOrderMode").value;
+      return {
+        serverDelayMs: Math.max(0, serverDelaySec)*1000,
+        syncWindowMs:  Math.max(0, syncWindowSec)*1000,
+        gapBetweenPrioritiesMs: Math.max(0, gapSec)*1000,
+        startBufferMs: Math.max(0, startBufferSec)*1000,
+        mode,
+      };
+    }
 
-    const btnAdd = document.getElementById("btnAdd");
-    const btnStart = document.getElementById("btnStart");
-    const btnRefresh = document.getElementById("btnRefresh");
-    const btnDeleteSession = document.getElementById("btnDeleteSession");
+    // ============================
+    // API calls (robust)
+    // ============================
+    async function apiGet(path){
+      const r = await fetch(`${API_BASE}${path}`, { headers:{ "Accept":"application/json" }});
+      if(!r.ok) throw new Error(`API ${r.status} ${r.statusText}`);
+      return r.json();
+    }
 
+    async function apiPost(path, body){
+      const r = await fetch(`${API_BASE}${path}`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "Accept":"application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      if(!r.ok) throw new Error(`API ${r.status} ${r.statusText}`);
+      return r.json();
+    }
+
+    async function apiDelete(path){
+      const r = await fetch(`${API_BASE}${path}`, { method:"DELETE", headers:{ "Accept":"application/json" }});
+      if(!r.ok) throw new Error(`API ${r.status} ${r.statusText}`);
+      return r.json();
+    }
+
+    // تلاش می‌کنیم از user.id استفاده کنیم (در مینی‌اپ واقعی داخل تلگرام موجوده)
+    function getTelegramUserId(){
+      return tg?.initDataUnsafe?.user?.id || null;
+    }
+
+    // ساخت/گرفتن سشن:
+    // 1) اگر sid در URL هست، همونو می‌گیریم
+    // 2) اگر نیست، با creator_id یک pending می‌سازیم (pending_simple یا pending)
+    async function ensureSessionId(){
+      const sidFromUrl = qs("sid");
+      if(sidFromUrl) return sidFromUrl;
+
+      const uid = getTelegramUserId();
+      if(!uid){
+        throw new Error("این صفحه باید داخل تلگرام باز شود تا user.id داشته باشیم (یا sid را در URL بفرستید).");
+      }
+
+      // اول pending_simple (اگر در بک‌اندت هست)
+      try{
+        const a = await apiPost(`/session/pending_simple`, { creator_id: uid });
+        if(a?.sid) return String(a.sid);
+      }catch(_){}
+
+      // fallback: pending (اگر chat_id لازم دارد، از initDataUnsafe.chat.id می‌گیریم)
+      const chatId = tg?.initDataUnsafe?.chat?.id;
+      if(!chatId) throw new Error("chat_id پیدا نشد (برای endpoint /session/pending). sid را در URL بفرست یا از pending_simple استفاده کن.");
+      const b = await apiPost(`/session/pending`, { chat_id: chatId, creator_id: uid });
+      if(!b?.sid) throw new Error("ساخت سشن ناموفق بود");
+      return String(b.sid);
+    }
+
+    // ============================
     // State
-    let creatorId = null;
+    // ============================
     let sid = null;
     let session = null;
     let items = [];
-    let serverOffset = 0;
 
-    async function getPendingSession() {
-      const res = await fetch(`${API_BASE}/session/pending_simple?creator_id=${encodeURIComponent(creatorId)}`, {
-        method: "POST",
-        headers: { "Accept": "application/json" },
-      });
+    // شروع محلی (اگر از بک‌اند started_at_ms نگیری)
+    // کلیدش بر اساس sid ذخیره میشه
+    function localStartKey(){ return sid ? `bb_sync_started_at_ms_${sid}` : "bb_sync_started_at_ms"; }
 
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      if (!data.sid) throw new Error("API sid نداد");
-
-      sid = data.sid;
+    function getLocalStartedAt(){
+      const v = localStorage.getItem(localStartKey());
+      const n = v ? Number(v) : 0;
+      return Number.isFinite(n) && n>0 ? n : 0;
     }
 
-    async function loadSession() {
-      const res = await fetch(`${API_BASE}/session?sid=${encodeURIComponent(sid)}`, {
-        method: "GET",
-        headers: { "Accept": "application/json" },
-      });
+    function setLocalStartedAt(ms){
+      localStorage.setItem(localStartKey(), String(ms));
+    }
 
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
+    function clearLocalStartedAt(){
+      localStorage.removeItem(localStartKey());
+    }
 
-      if (data.error) throw new Error("API says: " + data.error);
+    // ============================
+    // Load
+    // ============================
+    async function load(){
+      sid = await ensureSessionId();
 
-      serverOffset = data.server_now_ms - Date.now();
+      const data = await apiGet(`/session?sid=${encodeURIComponent(sid)}`);
+      if(data?.error) throw new Error(`API: ${data.error}`);
 
-      session = data.session;
+      session = data.session || null;
       items = Array.isArray(data.items) ? data.items : [];
+
+      const chatId = tg?.initDataUnsafe?.chat?.id;
+      const chatType = tg?.initDataUnsafe?.chat_type;
+
+      setMeta(
+        `sid=#${sid} | وضعیت: ${statusLabel(session?.status)}`
+        + (chatId ? ` | chat_id: ${chatId}` : "")
+        + (chatType ? ` | chat_type: ${chatType}` : "")
+      );
+
+      document.getElementById("chips").style.display = "flex";
+      document.getElementById("chipSid").textContent = `SID: ${sid}`;
+      document.getElementById("chipStatus").textContent = `Status: ${statusLabel(session?.status)}`;
+      document.getElementById("chipCount").textContent = `Count: ${items.length}`;
     }
 
-    async function addTimer(durationMs, title) {
-      const payload = {
-        duration_ms: durationMs,
-        title: title || null
+    // ============================
+    // Scheduling logic
+    // ============================
+    function normalizeItem(it){
+      // بک‌اندهای مختلف ممکنه فیلدهای مختلف داشته باشن
+      const title = it.title ?? it.name ?? "";
+      const travelMs = Number(it.duration_ms ?? it.travel_ms ?? 0);
+      const priority = Number(it.priority ?? it.order_index ?? 1);
+      return {
+        raw: it,
+        id: it.id ?? it.item_id ?? null,
+        title,
+        travelMs,
+        priority: Number.isFinite(priority) && priority>0 ? priority : 1,
       };
-
-      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      if (data.error) throw new Error("API says: " + data.error);
     }
 
-    async function startAll() {
-      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/start`, {
-        method: "POST"
+    function computeSchedule(normalized, startedAtMs){
+      const st = getSettings();
+
+      // ولیدیشن
+      const arr = normalized.filter(x => x.travelMs > 0);
+      if(arr.length === 0) return { rows: [], startedAtMs, hitTargetsByPriority: {} };
+
+      // بیشترین زمان مسیر
+      const maxTravel = Math.max(...arr.map(x => x.travelMs));
+
+      // زمان برخورد هدف گروه اول:
+      // شروع + (maxTravel + بافر)
+      const firstHit = startedAtMs + maxTravel + st.startBufferMs;
+
+      // اولویت‌ها
+      const priorities = [...new Set(arr.map(x => x.priority))].sort((a,b)=>a-b);
+
+      const hitTargetsByPriority = {};
+      if(st.mode === "sameHitAll"){
+        // همه با هم بخورن => همه priority ها یک هدف مشترک
+        for(const p of priorities) hitTargetsByPriority[p] = firstHit;
+      }else{
+        // بر اساس اولویت: هر اولویت با فاصله مشخص
+        priorities.forEach((p, idx)=>{
+          hitTargetsByPriority[p] = firstHit + idx * st.gapBetweenPrioritiesMs;
+        });
+      }
+
+      // لانچ هر نفر
+      const rows = arr.map(x=>{
+        const hitTarget = hitTargetsByPriority[x.priority];
+        const launchAt = hitTarget - x.travelMs;
+        return {
+          ...x,
+          hitTarget,
+          launchAt,
+        };
       });
 
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      if (data.error) throw new Error("API says: " + data.error);
+      // برای نمایش “صف لانچ”، بر اساس launchAt مرتب می‌کنیم
+      rows.sort((a,b)=>a.launchAt - b.launchAt);
+
+      // اختلاف لانچ با قبلی
+      for(let i=0;i<rows.length;i++){
+        rows[i].deltaFromPrev = (i===0) ? 0 : (rows[i].launchAt - rows[i-1].launchAt);
+      }
+
+      return { rows, startedAtMs, hitTargetsByPriority };
     }
 
-    async function deleteItem(itemId) {
-      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}/item/${encodeURIComponent(itemId)}`, {
-        method: "DELETE"
-      });
-
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      if (data.error) throw new Error("API says: " + data.error);
+    // وضعیت سشن از کجا بیاد؟
+    // 1) اگر session.started_at_ms موجود بود، همونو
+    // 2) وگرنه از localStorage
+    function effectiveStartedAt(){
+      const s = Number(session?.started_at_ms || 0);
+      if(s>0) return s;
+      return getLocalStartedAt();
     }
 
-    async function deleteSession() {
-      const res = await fetch(`${API_BASE}/session/${encodeURIComponent(sid)}`, {
-        method: "DELETE"
-      });
+    function render(){
+      const list = document.getElementById("list");
+      const now = Date.now();
+      document.getElementById("clockBadge").textContent = `⏱ ${fmtMs(now % (24*3600*1000))}`;
 
-      if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-      const data = await res.json();
-      if (data.error) throw new Error("API says: " + data.error);
-    }
-
-    function render() {
-      chips.style.display = "flex";
-      chipInfo.textContent = `sid: ${sid} | status: ${statusLabel(session?.status)} | items: ${items.length}`;
-
-      setMeta(`وضعیت: ${statusLabel(session?.status)}`);
-
-      btnStart.style.display = (session?.status === "pending") ? "inline-block" : "none";
-
-      if (!items.length) {
-        content.innerHTML = `<div class="muted">هنوز تایمری اضافه نکردی.</div>`;
+      if(!sid){
+        list.innerHTML = `<div class="muted">sid نداریم.</div>`;
+        return;
+      }
+      if(!session){
+        list.innerHTML = `<div class="muted">در حال بارگذاری…</div>`;
         return;
       }
 
-      const now = Date.now() + serverOffset;
+      const normalized = items.map(normalizeItem);
 
-      if (session.status === "pending" || !session.started_at_ms) {
-        content.innerHTML = items
-          .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-          .map((t, idx) => `
+      // نمایش badge تلورانس
+      const st = getSettings();
+      const totalTol = st.serverDelayMs + st.syncWindowMs;
+      const badge = document.getElementById("syncBadge");
+      badge.textContent = `تلورانس تقریبی برخورد: ${Math.round(totalTol/1000)}s`;
+      badge.className = "badge";
+
+      // startedAt
+      const startedAtMs = effectiveStartedAt();
+      const startInfo = document.getElementById("startInfo");
+      if(startedAtMs>0){
+        startInfo.textContent = `شروع محاسبات از: ${new Date(startedAtMs).toLocaleString("fa-IR")}`;
+      }else{
+        startInfo.textContent = "هنوز شروع نشده. روی «شروع سشن» بزن تا لانچ‌ها محاسبه شوند.";
+      }
+
+      if(normalized.length === 0){
+        list.innerHTML = `<div class="muted">هنوز اتکی ثبت نشده.</div>`;
+        return;
+      }
+
+      // اگر شروع نشده، فقط لیست خام
+      if(startedAtMs<=0){
+        const raw = normalized
+          .slice()
+          .sort((a,b)=>a.priority-b.priority)
+          .map((x, idx)=>`
             <div class="card">
               <div class="title">
-                <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                <button class="btn btn-danger" onclick="window.deleteTimer(${t.id})">حذف</button>
+                <span>#${idx+1} — ${escapeHtml(x.title || "بدون عنوان")}</span>
+                <span class="badge">Priority: ${x.priority}</span>
               </div>
-              <div class="time">${fmt(Number(t.duration_ms || 0))}</div>
+              <div class="time">${fmtMs(x.travelMs)}</div>
+              <div class="sub">
+                <span>Travel: ${fmtMs(x.travelMs)}</span>
+                <span>برای دیدن زمان لانچ، شروع سشن را بزن</span>
+              </div>
             </div>
           `).join("");
+        list.innerHTML = raw;
         return;
       }
 
-      const startedAt = Number(session.started_at_ms);
+      // محاسبه کامل
+      const sch = computeSchedule(normalized, startedAtMs);
 
-      content.innerHTML = items
-        .sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-        .map((t, idx) => {
-          const endAt = startedAt + Number(t.duration_ms || 0);
-          const left = endAt - now;
-          const isDone = left <= 0;
+      // چک تلورانس داخل هر priority: اختلاف برخوردها (با hitTarget های تعریف شده)
+      // چون ما دقیق hitTarget می‌دیم، اختلاف تئوری 0 است؛
+      // اما برای نمایش، می‌گیم “در پنجره” و تلورانس را نشان می‌دهیم.
+      list.innerHTML = sch.rows.map((r, idx)=>{
+        const toLaunch = r.launchAt - now;
+        const hitAt = r.hitTarget;
+        const toHit = hitAt - now;
 
-          return `
-            <div class="card">
-              <div class="title">
-                <span>#${idx+1} ${t.title ? `— ${escapeHtml(t.title)}` : ""}</span>
-                <button class="btn btn-danger" onclick="window.deleteTimer(${t.id})">حذف</button>
-              </div>
-              <div class="time">${fmt(left)}</div>
-              <div class="sub"><span>مدت: ${fmt(Number(t.duration_ms || 0))}</span></div>
+        // وضعیت لانچ
+        let launchBadge = "در صف";
+        let bClass = "badge warn";
+        if(toLaunch <= 0) { launchBadge = "لانچ شد/بزن!"; bClass="badge ok"; }
+        if(toHit <= 0) { launchBadge = "برخورد گذشته"; bClass="badge"; }
+
+        const deltaPrev = r.deltaFromPrev || 0;
+
+        return `
+          <div class="card">
+            <div class="title">
+              <span>#${idx+1} — ${escapeHtml(r.title || "بدون عنوان")}</span>
+              <span class="${bClass}">${launchBadge}</span>
             </div>
-          `;
-        }).join("");
+
+            <div class="time">${fmtMs(toLaunch)}</div>
+
+            <div class="sub">
+              <span>Priority: <b>${r.priority}</b></span>
+              <span>Travel: <span class="mono">${fmtMs(r.travelMs)}</span></span>
+              <span>Δ لانچ با قبلی: <span class="mono">${fmtMs(deltaPrev)}</span></span>
+              <span>تا برخورد: <span class="mono">${fmtMs(toHit)}</span></span>
+            </div>
+
+            <div class="sub">
+              <span>زمان برخورد هدف: <span class="mono">${new Date(hitAt).toLocaleTimeString("fa-IR")}</span></span>
+              <span>زمان لانچ هدف: <span class="mono">${new Date(r.launchAt).toLocaleTimeString("fa-IR")}</span></span>
+            </div>
+
+            <div class="btnrow">
+              ${r.id ? `<button class="btn danger" onclick="deleteItem(${Number(r.id)})">حذف</button>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      hideError();
     }
 
-    window.deleteTimer = async (itemId) => {
-      try {
-        clearError();
-        await deleteItem(itemId);
-        await loadSession();
-        render();
-      } catch (e) {
-        showError(String(e));
+    // ============================
+    // Actions
+    // ============================
+    async function addAttack(){
+      const title = document.getElementById("inpTitle").value.trim();
+      const travelText = document.getElementById("inpTravel").value.trim();
+      const priority = Number(document.getElementById("inpPriority").value || 1);
+
+      let travelMs = 0;
+      try{
+        travelMs = parseTimeToMs(travelText);
+      }catch(e){
+        showError(String(e.message || e));
+        return;
       }
-    };
 
-    btnAdd.onclick = async () => {
-      try {
-        clearError();
-        const timeText = inpTime.value.trim();
-        const title = inpTitle.value.trim();
-
-        const durationMs = parseTimeToMs(timeText);
-
-        await addTimer(durationMs, title);
-
-        inpTime.value = "";
-        inpTitle.value = "";
-
-        await loadSession();
-        render();
-
-      } catch (e) {
-        showError(String(e));
+      if(!sid){
+        showError("sid نداریم");
+        return;
       }
-    };
 
-    btnStart.onclick = async () => {
-      try {
-        clearError();
-        await startAll();
-        await loadSession();
-        render();
-      } catch (e) {
-        showError(String(e));
-      }
-    };
+      // payload: بک‌اند ممکنه priority رو پشتیبانی نکنه؛
+      // پس دو روش:
+      // 1) اگر پشتیبانی می‌کند، مستقیم می‌فرستیم
+      // 2) اگر نه، داخل title هم encode می‌کنیم که از دست نره
+      const payload = {
+        title: title || null,
+        duration_ms: travelMs,
+        priority: Number.isFinite(priority) && priority>0 ? priority : 1,
+      };
 
-    btnRefresh.onclick = async () => {
-      try {
-        clearError();
-        await loadSession();
-        render();
-      } catch (e) {
-        showError(String(e));
-      }
-    };
-
-    btnDeleteSession.onclick = async () => {
-      try {
-        clearError();
-
-        if (!confirm("سشن و همه تایمرهای آن حذف شود؟")) return;
-
-        await deleteSession();
-
-        // سشن جدید بساز
-        await getPendingSession();
-        await loadSession();
-        render();
-
-      } catch (e) {
-        showError(String(e));
-      }
-    };
-
-    async function boot() {
-      try {
-        clearError();
-
-        creatorId = tg?.initDataUnsafe?.user?.id;
-        if (!creatorId) {
-          showError("user_id از تلگرام دریافت نشد. لطفاً از داخل تلگرام باز کن.");
+      try{
+        await apiPost(`/session/${encodeURIComponent(sid)}/add`, payload);
+      }catch(e){
+        // fallback: اگر priority باعث خطا شد، بدون priority بفرست
+        try{
+          const payload2 = { title: title ? `[P${payload.priority}] ${title}` : `[P${payload.priority}]`, duration_ms: travelMs };
+          await apiPost(`/session/${encodeURIComponent(sid)}/add`, payload2);
+        }catch(e2){
+          showError("خطا در اضافه کردن اتک:\n" + String(e2));
           return;
         }
-
-        controls.style.display = "flex";
-        controls2.style.display = "flex";
-
-        await getPendingSession();
-        await loadSession();
-        render();
-
-      } catch (e) {
-        showError("خطا: " + String(e));
       }
+
+      await load();
+      render();
+      hideError();
     }
 
-    (async () => {
-      await boot();
+    async function startSession(){
+      if(!sid) return;
 
-      setInterval(() => {
-        if (session && session.status === "running") {
-          render();
-        }
-      }, 200);
+      // اگر بک‌اند start دارد، استفاده کن.
+      // اگر نداشت یا خطا داد، start محلی.
+      try{
+        // تلاش: /session/{sid}/start
+        await apiPost(`/session/${encodeURIComponent(sid)}/start`, {});
+        await load();
+        render();
+        return;
+      }catch(_){}
 
-      setInterval(async () => {
-        try {
-          if (sid) await loadSession();
-        } catch {}
-      }, 5000);
+      // start محلی
+      const ms = Date.now();
+      setLocalStartedAt(ms);
+      await load();
+      render();
+    }
+
+    async function deleteItem(itemId){
+      if(!sid || !itemId) return;
+      try{
+        // اگر بک‌اند delete این شکلی دارد:
+        await apiDelete(`/session/${encodeURIComponent(sid)}/item/${encodeURIComponent(itemId)}`);
+      }catch(e){
+        showError("حذف آیتم روی سرور پشتیبانی نشد یا خطا داد:\n" + String(e));
+        return;
+      }
+      await load();
+      render();
+    }
+
+    // ============================
+    // Wire up UI
+    // ============================
+    document.getElementById("btnAdd").addEventListener("click", addAttack);
+    document.getElementById("btnStart").addEventListener("click", startSession);
+    document.getElementById("btnRefresh").addEventListener("click", async ()=>{ await load(); render(); });
+    document.getElementById("btnResetLocal").addEventListener("click", ()=>{ clearLocalStartedAt(); render(); });
+
+    document.getElementById("btnClear").addEventListener("click", ()=>{
+      document.getElementById("inpTitle").value = "";
+      document.getElementById("inpTravel").value = "";
+      document.getElementById("inpPriority").value = "1";
+      hideError();
+    });
+
+    // هر تغییری در تنظیمات => رندر مجدد
+    ["serverDelay","syncWindow","gapBetweenPriorities","startBuffer","hitOrderMode"].forEach(id=>{
+      document.getElementById(id).addEventListener("input", render);
+      document.getElementById(id).addEventListener("change", render);
+    });
+
+    // ============================
+    // Boot
+    // ============================
+    (async ()=>{
+      try{
+        await load();
+        render();
+
+        // رندر لایو
+        setInterval(render, 250);
+
+        // سینک سبک با سرور
+        setInterval(async ()=>{
+          try{ await load(); }catch(_){}
+        }, 5000);
+      }catch(e){
+        showError(
+          "خطا در راه‌اندازی:\n" + String(e) +
+          "\n\nچک کن:\n" +
+          "- API_BASE درست و HTTPS باشد\n" +
+          "- صفحه داخل تلگرام باز شده باشد (initData)\n" +
+          "- یا sid را داخل URL ارسال کن"
+        );
+      }
     })();
+
+    // NOTE: deleteItem باید global باشد تا onclick کار کند
+    window.deleteItem = deleteItem;
   </script>
 </body>
 </html>
